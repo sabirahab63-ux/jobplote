@@ -125,8 +125,16 @@ const upload = multer({
 });
 
 const app = express();
+const mongoUri = process.env.MONGODB_URI || "";
+
+console.log("MongoDB URI diagnostic:", {
+  present: Boolean(mongoUri),
+  startsCorrectly: mongoUri.startsWith("mongodb://") ||
+    mongoUri.startsWith("mongodb+srv://"),
+  hostname: mongoUri.match(/@([^:/?]+)/)?.[1] || "hostname-not-found",
+});
 const dbReady = mongoose
-  .connect(process.env.MONGODB_URI)
+ .connect(mongoUri)
   .then(async () => {
     console.log("MongoDB connected");
 
