@@ -125,6 +125,15 @@ const upload = multer({
 });
 
 const app = express();
+const dbReady = mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(async () => {
+    console.log("MongoDB connected");
+
+    if (process.env.AUTO_SEED !== "false") {
+      await seedDatabase();
+    }
+  });
 app.set("trust proxy", 1);
 app.use(
   cors({
@@ -132,8 +141,20 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "100kb" }));
-app.use("/api/auth", require("./auth"));
 
+app.use(async (req, res, next) => {
+  try {
+    await dbReady;
+    next();
+  } catch (err) {
+    console.error("MongoDB connection failed:", err.message);
+    res.status(500).json({
+      error: "Database connection failed",
+    });
+  }
+});
+
+app.use("/api/auth", require("./auth"));
 app.post(
   "/api/ping",
   auth(),
@@ -730,17 +751,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Something went wrong on the server" });
 });
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(async () => {
-    console.log("MongoDB connected");
-    if (process.env.AUTO_SEED !== "false" && (await seedDatabase()))
-      console.log("Demo data added (43 jobs, demo users)");
-    app.listen(PORT, () =>
-      console.log(`JobPlote running on http://localhost:${PORT}`),
-    );
-  })
-  .catch((e) => {
-    console.error("MongoDB connection failed:", e.message);
-    process.exit(1);
-  });
+
+if (require.main === module) {
+  dbReady
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`JobPlote running on port ${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Startup failed:", err.message);
+      process.exitCode = 1;
+    });
+}
+module.exports = app;
